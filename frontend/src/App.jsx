@@ -517,7 +517,11 @@ export default function App() {
   // AUTOMATED ROOT-CAUSE DIAGNOSTIC ENGINE
   // ====================================================
   const handleRunDiagnostics = async () => {
-    if (!selectedIncident) return;
+    if (!selectedIncident) {
+      showToast("Select an incident before running diagnostics", "error");
+      return;
+    }
+
     setDiagnosticsLoading(true);
     setScanningEffect(true);
 
@@ -532,6 +536,18 @@ export default function App() {
     }
 
     try {
+      const incidentTitle =
+        selectedIncident.title ||
+        selectedIncident.name ||
+        selectedIncident.incidentTitle ||
+        `Incident #${selectedIncident.id}`;
+
+      const incidentDescription =
+        selectedIncident.description ||
+        selectedIncident.error_message ||
+        selectedIncident.logs ||
+        incidentTitle;
+
       const res = await fetch(`${API_BASE}/api/ai/analyze`, {
         method: "POST",
         headers: {
@@ -540,32 +556,55 @@ export default function App() {
         },
         body: JSON.stringify({
           incidentId: selectedIncident.id,
-          description: selectedIncident.description || selectedIncident.title,
+          title: incidentTitle,
+          description: incidentDescription,
         }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        setDiagnosticsResult(data.analysis);
-        if (data.updatedIncident) {
-          setSelectedIncident(data.updatedIncident);
-          setIncidents((prev) =>
-            prev.map((i) => (i.id === data.updatedIncident.id ? data.updatedIncident : i))
-          );
-        }
-        loadAnalytics();
-        fetchIncidentSubData(selectedIncident.id);
-        showToast("Automated diagnostic assessment generated", "success");
-      } else {
-        showToast("Diagnostics execution encountered an error", "error");
+      let data = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = {};
       }
-    } catch {
-      showToast("Diagnostics telemetry connection error", "error");
+
+      if (!res.ok) {
+        const message =
+          data.error ||
+          data.message ||
+          `Diagnostics request failed with HTTP ${res.status}`;
+        throw new Error(message);
+      }
+
+      setDiagnosticsResult(data.analysis ?? data);
+
+      if (data.updatedIncident) {
+        setSelectedIncident(data.updatedIncident);
+        setIncidents((prev) =>
+          prev.map((incident) =>
+            incident.id === data.updatedIncident.id
+              ? data.updatedIncident
+              : incident
+          )
+        );
+      }
+
+      await loadAnalytics();
+      await fetchIncidentSubData(selectedIncident.id);
+      showToast("Automated diagnostic assessment generated", "success");
+    } catch (error) {
+      console.error("Diagnostics error:", error);
+      showToast(
+        error?.message || "Diagnostics telemetry connection error",
+        "error"
+      );
     } finally {
       setDiagnosticsLoading(false);
       setScanningEffect(false);
+
       if (diagCardRef.current) {
         gsap.killTweensOf(diagCardRef.current);
+        gsap.set(diagCardRef.current, { clearProps: "transform,opacity" });
       }
     }
   };
