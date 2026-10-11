@@ -273,7 +273,9 @@ export default function App() {
       });
       if (res.ok) {
         const data = await res.json();
-        let rows = data.content || [];
+        
+         let rows = Array.isArray(data) ? data : (data.content || []);
+
         // Optional client-side filter for environment & category if backend is standard
         if (environmentFilter) {
           rows = rows.filter((r) => r.environment === environmentFilter);
@@ -282,9 +284,10 @@ export default function App() {
           rows = rows.filter((r) => r.category === categoryFilter);
         }
         setIncidents(rows);
-        setPage(data.number || 0);
-        setTotalPages(data.totalPages || 1);
-        setTotalElements(data.totalElements || 0);
+
+        setPage(Array.isArray(data) ? targetPage : (data.number ?? targetPage));
+        setTotalPages(Array.isArray(data) ? 1 : (data.totalPages ?? 1));
+        setTotalElements(Array.isArray(data) ? rows.length : (data.totalElements ?? rows.length));
       }
     } catch {
       showToast("Error retrieving incident log", "error");
@@ -300,13 +303,17 @@ export default function App() {
     }
   }, [token, statusFilter, severityFilter, environmentFilter, categoryFilter]);
 
+  
+
   useEffect(() => {
     if (!token) return;
+
     const timeout = setTimeout(() => {
       loadIncidents(0);
     }, 280);
+
     return () => clearTimeout(timeout);
-  }, [searchQuery]);
+  }, [token, searchQuery]);
 
   // GSAP Animations
   useEffect(() => {
@@ -1527,10 +1534,10 @@ export default function App() {
                   <span className="badge" style={{ background: "rgba(255,255,255,0.08)", color: "#e2e8f0" }}>
                     {selectedIncident.environment || "PRODUCTION"}
                   </span>
-                  <span className={`badge badge-status-${selectedIncident.status.toLowerCase()}`}>
+                  <span className={`badge badge-status-${(selectedIncident.status || "OPEN").toLowerCase()}`}>
                     {selectedIncident.status}
                   </span>
-                  <span className={`badge badge-sev-${selectedIncident.severity.toLowerCase()}`}>
+                  <span className={`badge badge-sev-${(selectedIncident.severity || "MEDIUM").toLowerCase()}`}>
                     {selectedIncident.severity}
                   </span>
                 </div>
