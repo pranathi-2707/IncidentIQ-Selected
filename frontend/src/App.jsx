@@ -348,6 +348,12 @@ export default function App() {
     setDiagnosticsResult(null);
     setTroubleshootingRunbook(null);
 
+    // Clear the previous incident's related data while the new one loads.
+    setSimilarIncidents([]);
+    setAuditLogs([]);
+    setComments([]);
+    setResolutions([]);
+
     setTimeout(() => {
       if (drawerRef.current) {
         gsap.fromTo(
@@ -362,21 +368,45 @@ export default function App() {
   };
 
   const fetchIncidentSubData = async (incidentId) => {
-    const authHeaders = { Authorization: `Bearer ${token}` };
-    try {
-      const [simRes, audRes, comRes, resRes] = await Promise.all([
-        fetch(`${API_BASE}/api/incidents/${incidentId}/similar`, { headers: authHeaders }),
-        fetch(`${API_BASE}/api/incidents/${incidentId}/audit`, { headers: authHeaders }),
-        fetch(`${API_BASE}/api/comments/incident/${incidentId}`, { headers: authHeaders }),
-        fetch(`${API_BASE}/api/resolutions/incident/${incidentId}`, { headers: authHeaders }),
-      ]);
+    const authHeaders = {
+      Authorization: `Bearer ${token}`,
+    };
 
-      if (simRes.ok) setSimilarIncidents(await simRes.json());
-      if (audRes.ok) setAuditLogs(await audRes.json());
-      if (comRes.ok) setComments(await comRes.json());
-      if (resRes.ok) setResolutions(await resRes.json());
-    } catch (err) {
-      console.warn("Sub-data fetch error:", err);
+    const toArray = (data) => {
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data?.content)) return data.content;
+      return [];
+    };
+
+    try {
+      const endpoints = [
+        `${API_BASE}/api/incidents/${incidentId}/similar`,
+        `${API_BASE}/api/incidents/${incidentId}/audit`,
+        `${API_BASE}/api/comments/incident/${incidentId}`,
+        `${API_BASE}/api/resolutions/incident/${incidentId}`,
+      ];
+
+      const responses = await Promise.all(
+        endpoints.map((url) => fetch(url, { headers: authHeaders }))
+      );
+
+      const results = await Promise.all(
+        responses.map(async (response) => {
+          if (!response.ok) return [];
+          return toArray(await response.json());
+        })
+      );
+
+      setSimilarIncidents(results[0]);
+      setAuditLogs(results[1]);
+      setComments(results[2]);
+      setResolutions(results[3]);
+    } catch (error) {
+      console.error("Sub-data fetch error:", error);
+      setSimilarIncidents([]);
+      setAuditLogs([]);
+      setComments([]);
+      setResolutions([]);
     }
   };
 
